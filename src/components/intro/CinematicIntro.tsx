@@ -683,14 +683,16 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 touch-none bg-void"
+      data-stage={stage}
       style={{ transition: "opacity .9s ease", opacity: stage === "out" ? 0 : 1 }}
     >
       <canvas
         ref={canvasRef}
         className="absolute inset-0 size-full"
-        onClick={() => tapRef.current()}
+        onPointerDown={() => tapRef.current()}
         aria-label="مقدمة تفاعلية: تفاعل كيميائي"
       />
+
 
       {prompt && (
         <button
