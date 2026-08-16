@@ -362,7 +362,6 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
       const { cx, cy, r } = f;
       const neckH = r * 1.85;
       const neckW = r * 0.3;
-      const shoulderY = cy - r * 0.86;
       ctx.save();
       ctx.globalAlpha = alpha;
 
@@ -371,7 +370,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
       const a0 = Math.asin(neckW / r);
       outline.moveTo(cx - neckW, cy - neckH);
       outline.lineTo(cx - neckW, cy - r * Math.cos(a0));
-      outline.arc(cx, cy, r, -Math.PI / 2 - a0, -Math.PI / 2 + a0, false);
+      outline.arc(cx, cy, r, -Math.PI / 2 - a0, -Math.PI / 2 + a0, true);
       outline.lineTo(cx + neckW, cy - neckH);
 
 
