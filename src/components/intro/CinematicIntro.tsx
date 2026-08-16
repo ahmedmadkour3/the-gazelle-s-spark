@@ -360,40 +360,61 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
     const drawFlask = (alpha: number, glow: number) => {
       const f = flask();
       const { cx, cy, r } = f;
+      const neckH = r * 1.85;
+      const neckW = r * 0.3;
+      const shoulderY = cy - r * 0.86;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.lineWidth = Math.max(1, r * 0.035);
-      ctx.strokeStyle = `rgba(190,225,240,${0.55 * alpha})`;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, Math.PI * -0.72, Math.PI * -0.28, true);
-      ctx.moveTo(cx - r * 0.28, cy - r * 0.93);
-      ctx.lineTo(cx - r * 0.28, cy - r * 1.75);
-      ctx.moveTo(cx + r * 0.28, cy - r * 0.93);
-      ctx.lineTo(cx + r * 0.28, cy - r * 1.75);
-      ctx.stroke();
 
-      // liquid
-      const lg = ctx.createLinearGradient(cx, cy - r * 0.3, cx, cy + r);
-      lg.addColorStop(0, `rgba(90,210,235,${0.16 + glow * 0.5})`);
-      lg.addColorStop(1, `rgba(20,70,110,${0.28 + glow * 0.35})`);
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.94, Math.PI * 0.02, Math.PI * 0.98, false);
-      ctx.closePath();
+      // outline: neck + bowl in one continuous silhouette
+      const outline = new Path2D();
+      outline.moveTo(cx - neckW, cy - neckH);
+      outline.lineTo(cx - neckW, shoulderY - r * 0.12);
+      outline.quadraticCurveTo(cx - neckW, shoulderY, cx - r * 0.62, cy - r * 0.66);
+      outline.arc(cx, cy, r, Math.PI * 1.24, Math.PI * -0.24, false);
+      outline.quadraticCurveTo(cx + neckW, shoulderY, cx + neckW, shoulderY - r * 0.12);
+      outline.lineTo(cx + neckW, cy - neckH);
+
+      // liquid, clipped to the bowl
+      ctx.save();
+      const bowl = new Path2D();
+      bowl.arc(cx, cy, r * 0.96, 0, Math.PI * 2);
+      ctx.clip(bowl);
+      const lg = ctx.createLinearGradient(cx, cy - r * 0.25, cx, cy + r);
+      lg.addColorStop(0, `rgba(105,215,240,${0.2 + glow * 0.5})`);
+      lg.addColorStop(1, `rgba(16,58,95,${0.55 + glow * 0.3})`);
       ctx.fillStyle = lg;
-      ctx.fill();
+      ctx.fillRect(cx - r, cy - r * 0.22, r * 2, r * 2);
+      ctx.restore();
+
+      // glass
+      ctx.lineWidth = Math.max(1, r * 0.045);
+      ctx.strokeStyle = `rgba(196,228,242,${0.5 * alpha})`;
+      ctx.shadowColor = `rgba(120,215,250,${0.35 * (0.3 + glow)})`;
+      ctx.shadowBlur = r * 0.5;
+      ctx.stroke(outline);
+      ctx.shadowBlur = 0;
+
+      // specular highlight
+      ctx.lineWidth = Math.max(1, r * 0.06);
+      ctx.strokeStyle = `rgba(255,255,255,${0.2 * alpha})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.8, Math.PI * 1.02, Math.PI * 1.28);
+      ctx.stroke();
 
       if (ripple > 0.01) {
         for (let i = 0; i < 3; i++) {
-          const rr = r * (0.2 + (1 - ripple) * 0.9) + i * r * 0.16;
+          const rr = r * (0.2 + (1 - ripple) * 0.75) + i * r * 0.14;
           ctx.beginPath();
-          ctx.strokeStyle = `rgba(150,235,255,${ripple * 0.35 - i * 0.08})`;
+          ctx.strokeStyle = `rgba(160,238,255,${ripple * 0.4 - i * 0.09})`;
           ctx.lineWidth = 1.2;
-          ctx.ellipse(cx, cy + r * 0.1, rr, rr * 0.28, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx, cy - r * 0.12, rr, rr * 0.26, 0, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
       ctx.restore();
     };
+
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
