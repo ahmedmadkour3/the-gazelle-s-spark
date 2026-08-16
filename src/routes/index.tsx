@@ -67,8 +67,9 @@ function Index() {
           <SoundToggle />
         </div>
 
-        <TeacherReveal />
         <EquationSection />
+        <TeacherReveal />
+
         <Dedication />
         <StudentVault />
         <PrevCohortVideos />
