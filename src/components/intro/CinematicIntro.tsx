@@ -226,7 +226,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
             vx: (Math.random() - 0.5) * 0.25,
             vy: -0.35 - Math.random() * 0.5,
             s: 1 + Math.random() * 2.2,
-            a: 0.25 + Math.random() * 0.4,
+            a: 0.13 + Math.random() * 0.22,
             max: 2600 + Math.random() * 1800,
           }),
         );
@@ -403,7 +403,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
 
       // ---- stage timeline
       if (s === "dark" && st > 900) setStageInternal("flask");
-      if (s === "flask" && st > 2400) setStageInternal("drop");
+      if (s === "flask" && st > 1800) setStageInternal("drop");
       if (s === "drop" && drop.landed) setStageInternal("react");
       if (s === "react") {
         if (now - lastBubble > 90) {
@@ -619,8 +619,8 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
           a *= Math.min(1, 0.35 + p.life / 900);
         }
         if (a <= 0.01) continue;
-        const size = p.s * (p.role === "vapor" ? 2.4 : 1.6);
-        const rg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 3);
+        const size = p.s * (p.role === "vapor" ? 1.5 : 1.15);
+        const rg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 2.2);
         const tint =
           p.role === "vapor"
             ? "150,205,230"
@@ -631,7 +631,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
         rg.addColorStop(1, `rgba(${tint},0)`);
         ctx.fillStyle = rg;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, size * 3, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, size * 2.2, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalCompositeOperation = "source-over";
