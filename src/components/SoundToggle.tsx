@@ -3,7 +3,13 @@ import { isSoundOn, onSoundChange, toggleSound } from "@/lib/sfx";
 
 export function SoundToggle({ className = "" }: { className?: string }) {
   const [on, setOn] = useState(false);
-  useEffect(() => onSoundChange(setOn), []);
+  useEffect(() => {
+    const off = onSoundChange(setOn);
+    return () => {
+      off();
+    };
+  }, []);
+
   useEffect(() => setOn(isSoundOn()), []);
 
   return (
