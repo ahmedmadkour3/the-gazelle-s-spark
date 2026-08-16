@@ -368,10 +368,12 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
       // outline: round bowl plus straight neck
       const outline = new Path2D();
       const a0 = Math.asin(neckW / r);
-      outline.moveTo(cx - neckW, cy - neckH);
-      outline.lineTo(cx - neckW, cy - r * Math.cos(a0));
-      outline.arc(cx, cy, r, -Math.PI / 2 - a0, -Math.PI / 2 + a0, true);
+      outline.arc(cx, cy, r, -Math.PI / 2 + a0, -Math.PI / 2 - a0, false);
+      outline.moveTo(cx - neckW, cy - r * Math.cos(a0));
+      outline.lineTo(cx - neckW, cy - neckH);
+      outline.moveTo(cx + neckW, cy - r * Math.cos(a0));
       outline.lineTo(cx + neckW, cy - neckH);
+
 
 
       // liquid, clipped to the bowl
