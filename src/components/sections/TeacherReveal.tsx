@@ -10,7 +10,7 @@ export function TeacherReveal() {
       <div className="reveal-scale relative">
         <div
           aria-hidden
-          className="anim-breathe absolute -inset-8 -z-10 rounded-[3rem]"
+          className="anim-breathe absolute -inset-4 -z-10 rounded-[3rem]"
           style={{
             background:
               "radial-gradient(60% 50% at 50% 30%, oklch(0.8 0.13 205 / .22), transparent 70%)",
