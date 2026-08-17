@@ -390,7 +390,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
 
       // glass
       ctx.lineWidth = Math.max(1, r * 0.045);
-      ctx.strokeStyle = `rgba(196,228,242,${0.5 * alpha})`;
+      ctx.strokeStyle = `rgba(255,0,0,1)`;
       ctx.shadowColor = `rgba(120,215,250,${0.35 * (0.3 + glow)})`;
       ctx.shadowBlur = r * 0.5;
       ctx.stroke(outline);
