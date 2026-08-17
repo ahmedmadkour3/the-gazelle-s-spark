@@ -16,7 +16,13 @@ export function TeacherReveal() {
               "radial-gradient(60% 50% at 50% 30%, oklch(0.8 0.13 205 / .22), transparent 70%)",
           }}
         />
-        <figure className="surface-glass relative overflow-hidden rounded-[1.75rem]">
+        <figure
+          className="float-slide surface-glass relative overflow-hidden rounded-[1.75rem]"
+          style={{
+            boxShadow:
+              "0 40px 80px -45px oklch(0 0 0 / .9), 0 10px 30px -18px oklch(0.8 0.13 205 / .4)",
+          }}
+        >
           <div className="relative aspect-[4/5] w-full">
             {portraitHero ? (
               <img

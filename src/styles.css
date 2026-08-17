@@ -222,6 +222,30 @@
     opacity: 0.7;
   }
 }
+@keyframes float-slide {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--slide-rot, 0deg));
+  }
+  50% {
+    transform: translateY(-10px) rotate(var(--slide-rot, 0deg));
+  }
+}
+
+/* floating photographic slide — subtle physical motion + depth */
+.float-slide {
+  animation: float-slide 7s ease-in-out infinite;
+  will-change: transform;
+}
+.float-slide.is-lift {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float-slide {
+    animation: none;
+  }
+}
 
 .anim-breathe {
   animation: breathe 6s ease-in-out infinite;
