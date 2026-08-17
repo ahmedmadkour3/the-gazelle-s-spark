@@ -56,7 +56,7 @@ function Index() {
       <AmbientParticles />
       {intro && <CinematicIntro onDone={done} />}
 
-      <main className="relative">
+      <main className="relative overflow-x-hidden">
         <div
           className="fixed z-30"
           style={{
