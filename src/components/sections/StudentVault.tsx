@@ -90,15 +90,14 @@ export function StudentVault() {
                 مكان صور آراء الطلاب (سكرين شوتس الدفعة الحالية)
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                ارفعها وضيفها في <span dir="ltr">src/lib/media.ts</span> ←{" "}
-                <span dir="ltr">studentShots</span>
+                في انتظار رفع الصور
               </p>
             </div>
           ) : (
             <>
               <div
                 ref={trackRef}
-                className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {studentShots.map((s, i) => (
                   <button

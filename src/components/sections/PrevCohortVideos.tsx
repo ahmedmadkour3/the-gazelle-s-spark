@@ -89,8 +89,8 @@ function VideoCard({
                 </p>
                 <p className="mt-2 text-sm text-silver">مكان فيديو الطالب</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  النسبة {ratio === "9/16" ? "٩:١٦ رأسي" : "١:١ مربع"} — ضيفه في{" "}
-                  <span dir="ltr">media.ts</span>
+                  النسبة {ratio === "9/16" ? "٩:١٦ رأسي" : "١:١ مربع"} — في
+                  انتظار رفع الفيديو
                 </p>
               </div>
             </div>
