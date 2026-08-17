@@ -98,7 +98,7 @@ export function StudentVault() {
             <>
               <div
                 ref={trackRef}
-                className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {studentShots.map((s, i) => (
                   <button
