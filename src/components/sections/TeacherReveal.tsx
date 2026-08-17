@@ -70,7 +70,7 @@ export function PortraitSlot({ n }: { n: number }) {
           مكان صورة المستر رقم {n}
         </p>
         <p className="mt-1 text-xs text-muted-foreground/70">
-          حطّها في src/assets واربطها من src/lib/media.ts
+          في انتظار رفع الصورة
         </p>
       </div>
     </div>

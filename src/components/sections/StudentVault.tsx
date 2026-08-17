@@ -90,8 +90,7 @@ export function StudentVault() {
                 مكان صور آراء الطلاب (سكرين شوتس الدفعة الحالية)
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                ارفعها وضيفها في <span dir="ltr">src/lib/media.ts</span> ←{" "}
-                <span dir="ltr">studentShots</span>
+                في انتظار رفع الصور
               </p>
             </div>
           ) : (
