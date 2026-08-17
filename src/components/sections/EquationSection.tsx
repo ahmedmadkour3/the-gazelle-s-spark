@@ -56,132 +56,85 @@ export function EquationSection() {
     <section
       id="equation"
       ref={ref}
-      className="relative mx-auto flex min-h-[92svh] max-w-3xl flex-col justify-center px-5 py-24"
+      className="relative mx-auto flex min-h-[92svh] max-w-3xl flex-col justify-center px-4 py-24"
     >
       <p className="label-mono reveal">المعادلة</p>
       <h2 className="reveal mt-3 text-2xl leading-snug sm:text-3xl">
         كل حاجة فيه بتتجمع في معادلة واحدة
       </h2>
 
-      <div className="mt-10 space-y-4">
+      {/* Single horizontal scientific formula — stays on one line on mobile */}
+      <div
+        dir="rtl"
+        className="surface-glass mt-10 flex items-center justify-center gap-1.5 overflow-hidden rounded-2xl px-2 py-6 sm:gap-3 sm:px-5 sm:py-8"
+      >
         {TERMS.map((t, i) => {
           const on = step > i;
           return (
-            <div
-              key={t.key}
-              className="surface-glass relative overflow-hidden rounded-2xl px-5 py-5 transition-all duration-700"
-              style={{
-                opacity: on ? 1 : 0.18,
-                transform: on ? "none" : "translateY(14px)",
-                borderColor: on ? "var(--color-ring)" : undefined,
-                boxShadow: on ? "var(--shadow-cinematic)" : "none",
-              }}
-            >
-              <TermVisual kind={t.kind} active={on} />
-              <div className="relative flex items-baseline gap-3">
-                <span className="font-display text-2xl font-black sm:text-3xl">
-                  {t.key}
-                </span>
-                <span aria-hidden className="text-xl">
+            <div key={t.key} className="flex items-center gap-1.5 sm:gap-3">
+              <span
+                className="flex flex-col items-center transition-all duration-700"
+                style={{
+                  opacity: on ? 1 : 0.18,
+                  transform: on ? "none" : "translateY(10px)",
+                }}
+              >
+                <span
+                  aria-hidden
+                  className="text-lg leading-none sm:text-2xl"
+                  style={{
+                    filter: on ? "none" : "grayscale(1)",
+                  }}
+                >
                   {t.icon}
                 </span>
-                {i < TERMS.length - 1 && (
-                  <span className="ms-auto font-display text-2xl text-primary/70">
-                    +
-                  </span>
-                )}
-              </div>
-              <p className="relative mt-1 text-sm text-muted-foreground">
-                {t.note}
-              </p>
+                <span className="mt-1 font-display text-sm font-black leading-none sm:text-xl">
+                  {t.key}
+                </span>
+              </span>
+              {i < TERMS.length - 1 && (
+                <span
+                  className="font-display text-lg text-primary/70 transition-opacity duration-700 sm:text-2xl"
+                  style={{ opacity: step > i + 1 ? 1 : 0.2 }}
+                >
+                  +
+                </span>
+              )}
             </div>
           );
         })}
-      </div>
 
-      <div
-        className="mt-8 text-center transition-all duration-700"
-        style={{ opacity: step >= 4 ? 1 : 0.15 }}
-      >
-        <span className="font-display text-4xl text-primary">=</span>
-      </div>
-
-      <div
-        className="mt-6 text-center transition-all duration-1000"
-        style={{
-          opacity: step >= 5 ? 1 : 0,
-          transform: step >= 5 ? "none" : "scale(.92)",
-          filter: step >= 5 ? "blur(0)" : "blur(10px)",
-        }}
-      >
-        <h3 className="text-cyan-grad font-display text-5xl font-black sm:text-6xl">
-          الغزال 🦌
-        </h3>
-        <p className="mt-3 text-lg text-silver">عمرو جمال</p>
-      </div>
-    </section>
-  );
-}
-
-function TermVisual({
-  kind,
-  active,
-}: {
-  kind: "chem" | "grace" | "speed";
-  active: boolean;
-}) {
-  if (!active) return null;
-  if (kind === "chem")
-    return (
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        {["H₂O", "O₂", "NaCl", "CO₂"].map((t, i) => (
-          <span
-            key={t}
-            className="absolute font-accent text-[0.65rem] text-primary/60"
-            style={{
-              left: `${12 + i * 21}%`,
-              bottom: 0,
-              animation: `drift-up ${5 + i}s ${i * 0.7}s ease-out infinite`,
-            }}
-          >
-            {t}
-          </span>
-        ))}
-      </div>
-    );
-  if (kind === "grace")
-    return (
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="absolute h-px w-1/2 origin-right"
-            style={{
-              top: `${28 + i * 22}%`,
-              right: "6%",
-              background:
-                "linear-gradient(to left, transparent, oklch(0.8 0.13 205 / .5), transparent)",
-              animation: `shimmer-line ${2.4 + i * 0.6}s ${i * 0.3}s ease-in-out infinite`,
-            }}
-          />
-        ))}
-      </div>
-    );
-  return (
-    <div aria-hidden className="pointer-events-none absolute inset-0">
-      {[0, 1, 2, 3].map((i) => (
         <span
-          key={i}
-          className="absolute h-[2px] w-16 rounded-full"
+          className="font-display text-lg text-primary transition-opacity duration-700 sm:text-2xl"
+          style={{ opacity: step >= 4 ? 1 : 0.15 }}
+        >
+          =
+        </span>
+
+        <span
+          className="flex flex-col items-center transition-all duration-1000"
           style={{
-            top: `${18 + i * 20}%`,
-            right: "-20%",
-            background:
-              "linear-gradient(to left, oklch(0.9 0.1 200 / .8), transparent)",
-            animation: `shimmer-line ${1 + i * 0.25}s ${i * 0.18}s linear infinite`,
+            opacity: step >= 5 ? 1 : 0,
+            transform: step >= 5 ? "none" : "scale(.8)",
+            filter: step >= 5 ? "blur(0)" : "blur(8px)",
           }}
-        />
-      ))}
-    </div>
+        >
+          <span aria-hidden className="text-lg leading-none sm:text-2xl">
+            🦌
+          </span>
+          <span className="text-cyan-grad mt-1 font-display text-base font-black leading-none sm:text-2xl">
+            الغزال
+          </span>
+        </span>
+      </div>
+
+      {/* short note that reinforces the formula without stacking it */}
+      <p
+        className="mt-6 text-center text-sm text-muted-foreground transition-opacity duration-1000"
+        style={{ opacity: step >= 5 ? 1 : 0 }}
+      >
+        كيمياء + رشاقة + سرعة = عمرو جمال، الغزال بتاع كيميا.
+      </p>
+    </section>
   );
 }

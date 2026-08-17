@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { sfx } from "@/lib/sfx";
 import { SoundToggle } from "@/components/SoundToggle";
 import { usePerfTier } from "@/hooks/useReveal";
+import { drawGazelle } from "@/lib/gazelle";
 
 type Stage =
   | "dark"
@@ -29,6 +30,8 @@ type P = {
   ty: number;
   bx: number;
   by: number;
+  ord: number; // 0 (head) .. 1 (hooves) — drives gradual formation
+  leg: number; // 0..1 how "leg-like" (lower body) — drives stride during run
   seed: number;
 };
 
@@ -39,38 +42,10 @@ const EQUATIONS = [
   "Na + Cl → NaCl",
 ];
 
-/** Leaping-gazelle silhouette, normalized 0..1 (facing right-to-left). */
-const GAZELLE: [number, number][] = [
-  [0.2, 0.03],
-  [0.25, 0.17],
-  [0.17, 0.2],
-  [0.07, 0.29],
-  [0.18, 0.33],
-  [0.3, 0.42],
-  [0.36, 0.53],
-  [0.34, 0.63],
-  [0.29, 0.8],
-  [0.24, 0.96],
-  [0.3, 0.95],
-  [0.34, 0.79],
-  [0.39, 0.62],
-  [0.55, 0.61],
-  [0.62, 0.73],
-  [0.7, 0.88],
-  [0.75, 0.97],
-  [0.8, 0.95],
-  [0.74, 0.79],
-  [0.71, 0.66],
-  [0.86, 0.51],
-  [0.95, 0.42],
-  [0.87, 0.44],
-  [0.7, 0.43],
-  [0.48, 0.4],
-  [0.35, 0.31],
-  [0.29, 0.22],
-  [0.24, 0.06],
-];
-
+/**
+ * Samples a filled/painted shape into scatter points by reading the alpha
+ * channel of an offscreen canvas. Returns points in the offscreen space.
+ */
 function samplePath(
   draw: (c: CanvasRenderingContext2D, w: number, h: number) => void,
   w: number,
@@ -88,7 +63,7 @@ function samplePath(
   for (let y = 0; y < off.height; y += step) {
     for (let x = 0; x < off.width; x += step) {
       const i = (y * off.width + x) * 4 + 3;
-      if (data[i]! > 130) pts.push([x, y]);
+      if (data[i]! > 120) pts.push([x, y]);
     }
   }
   return pts;
@@ -131,57 +106,51 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
     resize();
     window.addEventListener("resize", resize);
 
-    const MAX = tier === "low" ? 260 : 520;
+    const MAX = tier === "low" ? 320 : 640;
     const parts: P[] = [];
     const equations: { text: string; x: number; y: number; born: number }[] = [];
     const pointer = { x: -999, y: -999, active: false };
-    let drop = { y: 0, falling: false, landed: false };
+    const drop = { y: 0, falling: false, landed: false };
     let ripple = 0;
     let shapePts: [number, number][] = [];
-    let textPts: [number, number][] = [];
+    let shapeMinY = 0;
+    let shapeMaxY = 1;
     let runOffset = 0;
     let bob = 0;
     let raf = 0;
-    let start = performance.now();
+    const start = performance.now();
     stageAt.current = start;
 
     const flask = () => {
-      const r = Math.min(w, h) * (w < 520 ? 0.17 : 0.13);
-      return { cx: w / 2, cy: h * 0.63, r };
+      const r = Math.min(w, h) * (w < 520 ? 0.16 : 0.12);
+      return { cx: w / 2, cy: h * 0.6, r };
     };
 
+    // Build a realistic, anatomically-proportioned gazelle silhouette and
+    // sample it into scatter targets. Points carry an "ord" (head->hooves)
+    // so the body assembles gradually rather than appearing at once.
     const buildGazelle = () => {
-      const f = flask();
-      const sw = Math.min(w * 0.78, h * 0.52);
-      const sh = sw * 0.78;
-      shapePts = samplePath(
-        (c, cw, ch) => {
-          c.fillStyle = "#fff";
-          c.beginPath();
-          GAZELLE.forEach(([x, y], i) => {
-            const px = x * cw;
-            const py = y * ch;
-            if (i === 0) c.moveTo(px, py);
-            else c.lineTo(px, py);
-          });
-          c.closePath();
-          c.fill();
-          c.lineWidth = Math.max(2, cw * 0.02);
-          c.strokeStyle = "#fff";
-          c.stroke();
-        },
+      const sw = Math.min(w * 0.82, h * 0.62);
+      const sh = sw * 0.75;
+      const raw = samplePath(
+        (c, cw, ch) => drawGazelle(c, cw, ch, "#fff"),
         sw,
         sh,
-        tier === "low" ? 9 : 7,
-      ).map(([x, y]) => [
-        f.cx - sw / 2 + x,
-        h * 0.34 - sh / 2 + y + 0,
-      ]) as [number, number][];
+        tier === "low" ? 6 : 5,
+      );
+      const cx = w / 2;
+      const topY = h * 0.24;
+      shapePts = raw.map(([x, y]) => [cx - sw / 2 + x, topY + y]) as [
+        number,
+        number,
+      ][];
+      shapeMinY = Math.min(...shapePts.map((p) => p[1]));
+      shapeMaxY = Math.max(...shapePts.map((p) => p[1]));
     };
 
-    const buildText = () => {
-      const fs = Math.min(w * 0.16, 120);
-      textPts = samplePath(
+    const buildTextPts = () => {
+      const fs = Math.min(w * 0.22, 150);
+      return samplePath(
         (c, cw, ch) => {
           c.fillStyle = "#fff";
           c.textAlign = "center";
@@ -191,9 +160,9 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
           c.fillText("عمرو جمال", cw / 2, ch / 2);
         },
         w,
-        fs * 2.2,
+        fs * 1.8,
         tier === "low" ? 6 : 4,
-      ).map(([x, y]) => [x, h * 0.46 - fs * 1.1 + y]) as [number, number][];
+      ).map(([x, y]) => [x, h * 0.52 - fs * 0.9 + y]) as [number, number][];
     };
 
     const spawn = (p: Partial<P>): P => ({
@@ -210,6 +179,8 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
       ty: 0,
       bx: 0,
       by: 0,
+      ord: 0,
+      leg: 0,
       seed: Math.random() * 1000,
       ...p,
     });
@@ -221,12 +192,12 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
         parts.push(
           spawn({
             role: "vapor",
-            x: f.cx + (Math.random() - 0.5) * f.r * 0.7,
-            y: f.cy - f.r * 0.5,
-            vx: (Math.random() - 0.5) * 0.25,
-            vy: -0.35 - Math.random() * 0.5,
-            s: 1 + Math.random() * 2.2,
-            a: 0.13 + Math.random() * 0.22,
+            x: f.cx + (Math.random() - 0.5) * f.r * 0.8,
+            y: f.cy - f.r * 0.4,
+            vx: (Math.random() - 0.5) * 0.22,
+            vy: -0.3 - Math.random() * 0.45,
+            s: 1.4 + Math.random() * 2.6,
+            a: 0.1 + Math.random() * 0.16,
             max: 2600 + Math.random() * 1800,
           }),
         );
@@ -240,37 +211,43 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
         parts.push(
           spawn({
             role: "bubble",
-            x: f.cx + (Math.random() - 0.5) * f.r * 1.3,
-            y: f.cy + f.r * 0.55,
-            vx: (Math.random() - 0.5) * 0.15,
-            vy: -0.5 - Math.random() * 0.6,
-            s: 0.8 + Math.random() * 1.6,
-            a: 0.4 + Math.random() * 0.4,
+            x: f.cx + (Math.random() - 0.5) * f.r * 1.2,
+            y: f.cy + f.r * 0.5,
+            vx: (Math.random() - 0.5) * 0.12,
+            vy: -0.45 - Math.random() * 0.55,
+            s: 0.7 + Math.random() * 1.5,
+            a: 0.35 + Math.random() * 0.35,
             max: 1400,
           }),
         );
       }
     };
 
+    // Convert the rising gas into shape particles that will home onto the
+    // gazelle silhouette gradually (head first, then body, then legs).
     const assignShape = () => {
       if (!shapePts.length) buildGazelle();
       const f = flask();
       const want = Math.min(shapePts.length, MAX);
+      const span = Math.max(1, shapeMaxY - shapeMinY);
       for (let i = 0; i < want; i++) {
-        const t = shapePts[i % shapePts.length]!;
+        const t = shapePts[Math.floor((i / want) * shapePts.length)]!;
+        const ord = (t[1] - shapeMinY) / span; // 0 top(head) -> 1 bottom(legs)
         parts.push(
           spawn({
             role: "shape",
             x: f.cx + (Math.random() - 0.5) * f.r,
-            y: f.cy - f.r * 0.6,
-            vx: (Math.random() - 0.5) * 1.2,
-            vy: -1 - Math.random() * 2,
+            y: f.cy - f.r * 0.5,
+            vx: (Math.random() - 0.5) * 0.8,
+            vy: -0.8 - Math.random() * 1.4,
             bx: t[0],
             by: t[1],
             tx: t[0],
             ty: t[1],
-            s: 1 + Math.random() * 1.6,
-            a: 0.5 + Math.random() * 0.45,
+            ord,
+            leg: Math.max(0, (ord - 0.55) / 0.45), // lower body = more stride
+            s: 1 + Math.random() * 1.3,
+            a: 0.55 + Math.random() * 0.35,
             max: Infinity,
           }),
         );
@@ -278,18 +255,18 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
     };
 
     const toText = () => {
-      buildText();
+      const textPts = buildTextPts();
       const shapes = parts.filter((p) => p.role === "shape");
       shapes.forEach((p, i) => {
-        const t = textPts.length
-          ? textPts[i % textPts.length]!
-          : [w / 2, h / 2];
+        const t = textPts.length ? textPts[i % textPts.length]! : [w / 2, h / 2];
         p.bx = t[0]!;
         p.by = t[1]!;
         p.tx = t[0]!;
         p.ty = t[1]!;
+        p.ord = 0;
+        p.leg = 0;
         const ang = Math.random() * Math.PI * 2;
-        const sp = 4 + Math.random() * 9;
+        const sp = 5 + Math.random() * 10;
         p.vx = Math.cos(ang) * sp;
         p.vy = Math.sin(ang) * sp;
       });
@@ -305,8 +282,10 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
         ripple = 1;
       }
       if (s === "gas") {
-        assignShape();
         sfx.whoosh();
+      }
+      if (s === "gazelle") {
+        assignShape();
       }
       if (s === "run") sfx.whoosh();
       if (s === "burst") {
@@ -316,8 +295,8 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
       if (s === "name") {
         sfx.reveal();
         setNameStep(1);
-        window.setTimeout(() => setNameStep(2), 1100);
-        window.setTimeout(() => setNameStep(3), 2200);
+        window.setTimeout(() => setNameStep(2), 1200);
+        window.setTimeout(() => setNameStep(3), 2400);
       }
       if (s === "out") {
         window.setTimeout(finish, 1000);
@@ -357,65 +336,110 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
     let eqIdx = 0;
     let lastHoof = 0;
 
+    // ---------- realistic bright-lab glass flask ----------
     const drawFlask = (alpha: number, glow: number) => {
       const f = flask();
       const { cx, cy, r } = f;
-      const neckH = r * 1.85;
-      const neckW = r * 0.3;
+      const neckH = r * 1.9;
+      const neckW = r * 0.32;
       ctx.save();
       ctx.globalAlpha = alpha;
 
-      // outline: round bowl plus straight neck
-      const outline = new Path2D();
+      // soft contact shadow on the lab surface
+      ctx.save();
+      const sh = ctx.createRadialGradient(cx, cy + r * 1.02, 0, cx, cy + r * 1.02, r * 1.5);
+      sh.addColorStop(0, "rgba(70,90,110,0.28)");
+      sh.addColorStop(1, "rgba(70,90,110,0)");
+      ctx.fillStyle = sh;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + r * 1.02, r * 1.4, r * 0.34, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
       const a0 = Math.asin(neckW / r);
+      const outline = new Path2D();
       outline.arc(cx, cy, r, -Math.PI / 2 + a0, -Math.PI / 2 - a0, false);
       outline.moveTo(cx - neckW, cy - r * Math.cos(a0));
       outline.lineTo(cx - neckW, cy - neckH);
       outline.moveTo(cx + neckW, cy - r * Math.cos(a0));
       outline.lineTo(cx + neckW, cy - neckH);
 
-
-
-      // liquid, clipped to the bowl
+      // glass body — faint cool tint so it reads as real transparent glass
       ctx.save();
-      const bowl = new Path2D();
-      bowl.arc(cx, cy, r * 0.96, 0, Math.PI * 2);
-      ctx.clip(bowl);
-      const lg = ctx.createLinearGradient(cx, cy - r * 0.25, cx, cy + r);
-      lg.addColorStop(0, `rgba(105,215,240,${0.2 + glow * 0.5})`);
-      lg.addColorStop(1, `rgba(16,58,95,${0.55 + glow * 0.3})`);
-      ctx.fillStyle = lg;
-      ctx.fillRect(cx - r, cy - r * 0.22, r * 2, r * 2);
-      ctx.restore();
+      const bodyPath = new Path2D();
+      bodyPath.arc(cx, cy, r * 0.99, 0, Math.PI * 2);
+      ctx.clip(bodyPath);
+      const glass = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      glass.addColorStop(0, "rgba(255,255,255,0.34)");
+      glass.addColorStop(0.5, "rgba(214,230,240,0.14)");
+      glass.addColorStop(1, "rgba(150,180,200,0.22)");
+      ctx.fillStyle = glass;
+      ctx.fill(bodyPath);
 
-      // glass
-      ctx.lineWidth = Math.max(1, r * 0.045);
-      ctx.strokeStyle = `rgba(200,232,246,${0.6 * alpha})`;
-      ctx.shadowColor = `rgba(120,215,250,${0.35 * (0.3 + glow)})`;
-      ctx.shadowBlur = r * 0.5;
-      ctx.stroke(outline);
-      ctx.shadowBlur = 0;
-
-      // specular highlight
-      ctx.lineWidth = Math.max(1, r * 0.06);
-      ctx.strokeStyle = `rgba(255,255,255,${0.2 * alpha})`;
+      // liquid with a curved meniscus surface
+      const surfaceY = cy - r * 0.18;
+      const liq = ctx.createLinearGradient(cx, surfaceY, cx, cy + r);
+      liq.addColorStop(0, `rgba(120,205,225,${0.5 + glow * 0.35})`);
+      liq.addColorStop(1, `rgba(38,120,160,${0.7 + glow * 0.2})`);
+      ctx.fillStyle = liq;
       ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.8, Math.PI * 1.02, Math.PI * 1.28);
+      ctx.moveTo(cx - r, surfaceY + 3);
+      ctx.quadraticCurveTo(cx, surfaceY - r * 0.09, cx + r, surfaceY + 3);
+      ctx.lineTo(cx + r, cy + r);
+      ctx.lineTo(cx - r, cy + r);
+      ctx.closePath();
+      ctx.fill();
+
+      // liquid surface highlight
+      ctx.strokeStyle = "rgba(230,250,255,0.5)";
+      ctx.lineWidth = Math.max(1, r * 0.03);
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.85, surfaceY + 2);
+      ctx.quadraticCurveTo(cx, surfaceY - r * 0.08, cx + r * 0.85, surfaceY + 2);
       ctx.stroke();
 
+      // ripples on the surface after impact
       if (ripple > 0.01) {
         for (let i = 0; i < 3; i++) {
-          const rr = r * (0.2 + (1 - ripple) * 0.75) + i * r * 0.14;
+          const rr = r * (0.15 + (1 - ripple) * 0.7) + i * r * 0.14;
           ctx.beginPath();
-          ctx.strokeStyle = `rgba(160,238,255,${ripple * 0.4 - i * 0.09})`;
+          ctx.strokeStyle = `rgba(255,255,255,${ripple * 0.4 - i * 0.1})`;
           ctx.lineWidth = 1.2;
-          ctx.ellipse(cx, cy - r * 0.12, rr, rr * 0.26, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx, surfaceY, rr, rr * 0.2, 0, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
+
+      // condensation dots on the inner glass
+      for (let i = 0; i < (tier === "low" ? 8 : 16); i++) {
+        const ang = (i / 16) * Math.PI * 2 + i;
+        const rad = r * (0.55 + (i % 3) * 0.14);
+        ctx.fillStyle = "rgba(255,255,255,0.28)";
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad * 0.9, 0.9 + (i % 2), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // refraction / rim — subtle dark edge + bright specular (real glass)
+      ctx.lineWidth = Math.max(1.2, r * 0.05);
+      ctx.strokeStyle = "rgba(120,150,175,0.5)";
+      ctx.stroke(outline);
+      ctx.lineWidth = Math.max(1, r * 0.055);
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.82, Math.PI * 1.02, Math.PI * 1.32);
+      ctx.stroke();
+      // secondary highlight on the neck
+      ctx.lineWidth = Math.max(1, r * 0.04);
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.beginPath();
+      ctx.moveTo(cx - neckW * 0.4, cy - r * 0.8);
+      ctx.lineTo(cx - neckW * 0.4, cy - neckH * 0.9);
+      ctx.stroke();
+
       ctx.restore();
     };
-
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
@@ -425,7 +449,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
 
       // ---- stage timeline
       if (s === "dark" && st > 900) setStageInternal("flask");
-      if (s === "flask" && st > 1800) setStageInternal("drop");
+      if (s === "flask" && st > 1700) setStageInternal("drop");
       if (s === "drop" && drop.landed) setStageInternal("react");
       if (s === "react") {
         if (now - lastBubble > 90) {
@@ -441,7 +465,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
           equations.push({
             text: EQUATIONS[eqIdx]!,
             x: f.cx + side * Math.min(w * 0.24, 150),
-            y: f.cy - f.r * (1.4 + (eqIdx % 3) * 0.55),
+            y: f.cy - f.r * (1.5 + (eqIdx % 3) * 0.5),
             born: now,
           });
           eqIdx++;
@@ -450,17 +474,17 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
         if (st > 4600) setStageInternal("gas");
       }
       if (s === "gas") {
-        emitVapor(tier === "low" ? 1 : 3);
-        if (st > 3400) setStageInternal("gazelle");
+        emitVapor(tier === "low" ? 2 : 3);
+        if (st > 2400) setStageInternal("gazelle");
       }
       if (s === "gazelle") {
-        emitVapor(1);
-        if (st > 11000) setStageInternal("run");
+        if (Math.random() < 0.5) emitVapor(1);
+        if (st > 6000) setStageInternal("run");
       }
       if (s === "run") {
-        runOffset -= (0.9 + st / 1100) * (w < 520 ? 1 : 1.6);
-        bob = Math.sin(st / 110) * 6;
-        if (now - lastHoof > 260) {
+        runOffset -= (0.9 + st / 1100) * (w < 520 ? 1.1 : 1.7);
+        bob = Math.abs(Math.sin(st / 95)) * 8;
+        if (now - lastHoof > 250) {
           lastHoof = now;
           sfx.hoof();
           const f = flask();
@@ -468,31 +492,31 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
             parts.push(
               spawn({
                 role: "spark",
-                x: f.cx + runOffset * 0.2 + (Math.random() - 0.5) * 40,
-                y: h * 0.62 + Math.random() * 10,
-                vx: 1.5 + Math.random() * 3,
-                vy: -0.6 - Math.random() * 1.6,
-                s: 1 + Math.random() * 1.8,
+                x: f.cx + runOffset * 0.25 + (Math.random() - 0.3) * 50,
+                y: h * 0.6 + Math.random() * 12,
+                vx: 1.4 + Math.random() * 3,
+                vy: -0.5 - Math.random() * 1.5,
+                s: 1 + Math.random() * 1.6,
                 a: 0.5,
                 max: 900,
               }),
             );
           }
         }
-        if (st > 3400) setStageInternal("burst");
+        if (st > 3200) setStageInternal("burst");
       }
       if (s === "burst" && st > 1100) setStageInternal("name");
-      if (s === "name" && st > 5200) setStageInternal("out");
+      if (s === "name" && st > 5400) setStageInternal("out");
 
       // ---- drop physics
       if (s === "drop" || s === "react") {
         const f = flask();
         if (!drop.landed) {
           if (!drop.falling) {
-            drop.y = f.cy - f.r * 2.9 + Math.sin(now / 700) * 4;
+            drop.y = f.cy - f.r * 3 + Math.sin(now / 700) * 4;
           } else {
             drop.y += Math.max(2, (f.cy - drop.y) * 0.06) + 1.4;
-            if (drop.y >= f.cy - f.r * 0.1) {
+            if (drop.y >= f.cy - f.r * 0.16) {
               drop.landed = true;
               ripple = 1;
             }
@@ -501,68 +525,89 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
       }
       ripple *= 0.972;
 
-      // ---- render
+      // ================= RENDER (bright lab) =================
       ctx.clearRect(0, 0, w, h);
-      const bgGlow =
-        s === "dark" ? 0 : s === "flask" ? 0.12 : s === "drop" ? 0.2 : 0.45;
-      const g = ctx.createRadialGradient(
-        w / 2,
-        h * 0.6,
-        0,
-        w / 2,
-        h * 0.6,
-        Math.max(w, h) * 0.7,
-      );
-      g.addColorStop(0, `rgba(30,90,120,${bgGlow * 0.5})`);
-      g.addColorStop(1, "rgba(6,10,16,0)");
-      ctx.fillStyle = g;
+
+      // base bright lab gradient
+      const base = ctx.createLinearGradient(0, 0, 0, h);
+      base.addColorStop(0, "#eef4f8");
+      base.addColorStop(0.55, "#e3ebf1");
+      base.addColorStop(1, "#d3dce5");
+      ctx.fillStyle = base;
       ctx.fillRect(0, 0, w, h);
 
-      // atmospheric dust
-      ctx.globalCompositeOperation = "lighter";
-      const dust = tier === "low" ? 26 : 54;
+      // soft-box window light from top-center
+      const key = ctx.createRadialGradient(w / 2, h * 0.1, 0, w / 2, h * 0.1, Math.max(w, h) * 0.75);
+      key.addColorStop(0, "rgba(255,255,255,0.85)");
+      key.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = key;
+      ctx.fillRect(0, 0, w, h);
+
+      // subtle cyan atmosphere that intensifies with the reaction
+      const react = s === "react" || s === "gas" ? 0.5 : s === "gazelle" ? 0.35 : 0.14;
+      const atm = ctx.createRadialGradient(w / 2, h * 0.6, 0, w / 2, h * 0.6, Math.max(w, h) * 0.6);
+      atm.addColorStop(0, `rgba(150,210,230,${react * 0.4})`);
+      atm.addColorStop(1, "rgba(150,210,230,0)");
+      ctx.fillStyle = atm;
+      ctx.fillRect(0, 0, w, h);
+
+      // lab counter band (depth) lower third
+      const counter = ctx.createLinearGradient(0, h * 0.72, 0, h);
+      counter.addColorStop(0, "rgba(180,195,210,0)");
+      counter.addColorStop(1, "rgba(150,168,186,0.45)");
+      ctx.fillStyle = counter;
+      ctx.fillRect(0, h * 0.72, w, h * 0.28);
+
+      // atmospheric floating dust (soft, source-over so it reads on light bg)
+      const dust = tier === "low" ? 22 : 46;
       for (let i = 0; i < dust; i++) {
-        const px =
-          ((i * 97.13 + total * 0.006 * ((i % 5) + 1)) % (w + 40)) - 20;
+        const px = ((i * 97.13 + total * 0.006 * ((i % 5) + 1)) % (w + 40)) - 20;
         const py = ((i * 53.7 + total * 0.004 * ((i % 3) + 1)) % (h + 40)) - 20;
-        ctx.fillStyle = `rgba(160,200,225,${0.05 + (i % 4) * 0.014})`;
-        ctx.fillRect(px, py, 1.2, 1.2);
+        ctx.fillStyle =
+          i % 2 === 0
+            ? `rgba(255,255,255,${0.14 + (i % 4) * 0.03})`
+            : `rgba(120,140,160,${0.05 + (i % 3) * 0.02})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 1.1 + (i % 3) * 0.4, 0, Math.PI * 2);
+        ctx.fill();
       }
-      ctx.globalCompositeOperation = "source-over";
 
       const flaskAlpha =
         s === "dark"
           ? 0
           : s === "flask"
-            ? Math.min(1, st / 2200) * 0.85
+            ? Math.min(1, st / 2000)
             : s === "run" || s === "burst" || s === "name" || s === "out"
-              ? Math.max(0, 1 - st / 900) * 0.6
-              : 0.9;
+              ? Math.max(0, 1 - st / 900)
+              : 1;
       if (flaskAlpha > 0.01) drawFlask(flaskAlpha, ripple * 0.5);
 
       // falling drop
       if ((s === "drop" || (s === "react" && !drop.landed)) && flaskAlpha > 0) {
         const f = flask();
         ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        const dg = ctx.createRadialGradient(f.cx, drop.y, 0, f.cx, drop.y, 16);
-        dg.addColorStop(0, "rgba(200,250,255,0.95)");
-        dg.addColorStop(1, "rgba(90,200,240,0)");
+        const dg = ctx.createRadialGradient(f.cx, drop.y, 0, f.cx, drop.y, 12);
+        dg.addColorStop(0, "rgba(120,205,235,0.9)");
+        dg.addColorStop(1, "rgba(120,205,235,0)");
         ctx.fillStyle = dg;
         ctx.beginPath();
-        ctx.arc(f.cx, drop.y, 16, 0, Math.PI * 2);
+        ctx.arc(f.cx, drop.y, 12, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "rgba(235,255,255,0.95)";
+        ctx.fillStyle = "rgba(70,150,185,0.95)";
         ctx.beginPath();
-        ctx.ellipse(f.cx, drop.y, 3.2, 4.6, 0, 0, Math.PI * 2);
+        ctx.ellipse(f.cx, drop.y, 3, 4.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(f.cx - 1, drop.y - 1.4, 1, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      // equations
+      // equations — dark ink with a faint cyan glow so they read on light bg
       ctx.save();
       ctx.textAlign = "center";
-      ctx.font = `500 ${Math.max(12, Math.min(w * 0.038, 20))}px "Reem Kufi", monospace`;
+      ctx.font = `600 ${Math.max(13, Math.min(w * 0.04, 21))}px system-ui, "Segoe UI", Arial, sans-serif`;
       for (let i = equations.length - 1; i >= 0; i--) {
         const e = equations[i]!;
         const age = now - e.born;
@@ -572,18 +617,16 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
         }
         const k = age / 3600;
         const a = k < 0.2 ? k / 0.2 : k > 0.7 ? (1 - k) / 0.3 : 1;
-        ctx.globalAlpha = Math.max(0, a) * 0.85;
-        ctx.fillStyle = "rgba(175,235,255,1)";
-        ctx.shadowColor = "rgba(120,220,255,0.6)";
-        ctx.shadowBlur = 12;
+        ctx.globalAlpha = Math.max(0, a);
+        ctx.shadowColor = "rgba(120,205,230,0.7)";
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = "rgba(30,70,95,0.92)";
         ctx.fillText(e.text, e.x, e.y - k * 26);
       }
       ctx.restore();
 
-      // particles
-      ctx.globalCompositeOperation = "lighter";
-      const shaping =
-        s === "gas" || s === "gazelle" || s === "run" || s === "burst";
+      // ---- particles
+      const formT = s === "gazelle" ? Math.min(1, st / 3600) : 1; // formation progress
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i]!;
         p.life += 16.7;
@@ -591,40 +634,75 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
           parts.splice(i, 1);
           continue;
         }
+
+        let a = p.a;
+        let sizeMul = 1;
+        let tint = "255,255,255";
+        let composite: GlobalCompositeOperation = "source-over";
+
         if (p.role === "shape") {
+          // gradual formation: a particle only homes once formation time
+          // passes its ordinal (head -> body -> legs).
+          const gate = Math.min(1, Math.max(0, (formT - p.ord * 0.9) / 0.18));
           let tx = p.bx;
           let ty = p.by;
+
           if (s === "run") {
             tx += runOffset;
             ty += bob;
-            if (tx < -60) tx += w + 120;
-          }
-          if (s === "gazelle") {
-            // subtle head reaction to pointer
+            // fake gallop: legs stride out of phase with the body
+            const phase = p.bx > w / 2 ? 0 : Math.PI;
+            ty += Math.sin(st / 90 + phase) * 5 * p.leg;
+            if (tx < -80) tx += w + 160;
+          } else if (s === "gazelle") {
+            // head gently tracks the pointer for a "living" silhouette
+            const headness = Math.max(0, 1 - p.ord * 2);
             const dx = (pointer.active ? pointer.x : w / 2) - w / 2;
-            const dy = (pointer.active ? pointer.y : h * 0.4) - h * 0.4;
-            const headness = Math.max(0, 1 - (p.by - h * 0.18) / (h * 0.2));
-            tx += dx * 0.035 * headness;
+            const dy = (pointer.active ? pointer.y : h * 0.35) - h * 0.35;
+            tx += dx * 0.03 * headness;
             ty += dy * 0.025 * headness;
           }
-          const wob =
-            Math.sin(now / 620 + p.seed) * (s === "run" ? 3.4 : 2.2);
-          const k = s === "burst" || s === "name" ? 0.055 : 0.09;
-          p.vx += (tx + wob - p.x) * k;
-          p.vy += (ty + wob * 0.6 - p.y) * k;
-          p.vx *= 0.82;
-          p.vy *= 0.82;
+
+          const wob = Math.sin(now / 640 + p.seed) * (s === "run" ? 2.6 : 1.8);
+          const homing = s === "burst" || s === "name" ? 0.055 : 0.11;
+          if (s === "gazelle" && gate <= 0) {
+            // not yet part of the body — drift upward like gas
+            p.vy -= 0.01;
+            p.vx += Math.sin(now / 800 + p.seed) * 0.02;
+            a = 0.14;
+          } else {
+            p.vx += (tx + wob - p.x) * homing;
+            p.vy += (ty + wob * 0.5 - p.y) * homing;
+            p.vx *= 0.8;
+            p.vy *= 0.8;
+            a = p.a * (s === "gazelle" ? 0.35 + gate * 0.65 : 1);
+          }
+          // gazelle reads as a dark cinematic shadow on the bright lab
+          tint = "34,48,64";
+          sizeMul = 1.05;
+        } else if (p.role === "spark") {
+          p.vy += 0.02;
+          tint = "90,180,210";
+          composite = "source-over";
         } else {
+          // vapor / bubbles rise and cool
           p.vy -= p.role === "vapor" ? 0.004 : 0.008;
           p.vx += Math.sin(now / 900 + p.seed) * 0.01;
+          if (p.role === "vapor") {
+            tint = "255,255,255";
+            sizeMul = 1.7;
+          } else {
+            tint = "255,255,255";
+          }
         }
 
-        if (pointer.active) {
+        // pointer repels loose (non-shape) particles for tactility
+        if (pointer.active && p.role !== "shape") {
           const dx = p.x - pointer.x;
           const dy = p.y - pointer.y;
           const d2 = dx * dx + dy * dy;
           if (d2 < 9000 && d2 > 1) {
-            const f = (1 - d2 / 9000) * 0.7;
+            const f = (1 - d2 / 9000) * 0.6;
             p.vx += (dx / Math.sqrt(d2)) * f;
             p.vy += (dy / Math.sqrt(d2)) * f;
           }
@@ -633,28 +711,29 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
         p.x += p.vx;
         p.y += p.vy;
 
-        const lifeK =
-          p.max === Infinity ? 1 : 1 - Math.min(1, p.life / p.max);
-        let a = p.a * (p.role === "shape" ? 1 : lifeK);
+        const lifeK = p.max === Infinity ? 1 : 1 - Math.min(1, p.life / p.max);
+        if (p.role !== "shape") a *= lifeK;
         if (s === "out") a *= Math.max(0, 1 - st / 900);
-        if (p.role === "shape" && (s === "gas" || shaping)) {
-          a *= Math.min(1, 0.35 + p.life / 900);
-        }
         if (a <= 0.01) continue;
-        const size = p.s * (p.role === "vapor" ? 1.5 : 1.15);
-        const rg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 2.2);
-        const tint =
-          p.role === "vapor"
-            ? "150,205,230"
-            : p.role === "bubble"
-              ? "190,245,255"
-              : "140,230,255";
-        rg.addColorStop(0, `rgba(${tint},${a})`);
-        rg.addColorStop(1, `rgba(${tint},0)`);
-        ctx.fillStyle = rg;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, size * 2.2, 0, Math.PI * 2);
-        ctx.fill();
+
+        const size = p.s * (p.role === "vapor" ? 1.6 : 1.15) * sizeMul;
+        ctx.globalCompositeOperation = composite;
+        if (p.role === "bubble") {
+          // bubbles as tiny translucent rings for realism
+          ctx.strokeStyle = `rgba(255,255,255,${a})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, size * 1.6, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          const rg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 2.2);
+          rg.addColorStop(0, `rgba(${tint},${a})`);
+          rg.addColorStop(1, `rgba(${tint},0)`);
+          ctx.fillStyle = rg;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, size * 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalCompositeOperation = "source-over";
     };
@@ -679,14 +758,14 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
 
   if (failed) {
     return (
-      <div className="fixed inset-0 z-50 grid place-items-center bg-void px-6 text-center">
+      <div className="fixed inset-0 z-50 grid place-items-center bg-[#eef4f8] px-6 text-center text-[#22303f]">
         <div>
           <h1 className="text-3xl font-black">مستر عمرو جمال</h1>
-          <p className="mt-2 text-lg text-primary">الغزال 🦌</p>
-          <p className="text-muted-foreground">بتاع كيميا ⚗️</p>
+          <p className="mt-2 text-lg text-[#1c7ba0]">الغزال 🦌</p>
+          <p className="text-[#5a7185]">بتاع كيميا ⚗️</p>
           <button
             onClick={finish}
-            className="press mt-8 rounded-full border border-border bg-card px-6 py-3 text-sm"
+            className="press mt-8 rounded-full border border-[#c3d1dd] bg-white px-6 py-3 text-sm"
           >
             ادخل الموقع
           </button>
@@ -704,32 +783,47 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 touch-none bg-void"
+      className="fixed inset-0 z-50 touch-none"
       data-stage={stage}
-      style={{ transition: "opacity .9s ease", opacity: stage === "out" ? 0 : 1 }}
+      style={{
+        transition: "opacity .9s ease",
+        opacity: stage === "out" ? 0 : 1,
+        background: "linear-gradient(180deg,#eef4f8 0%,#e3ebf1 55%,#d3dce5 100%)",
+      }}
     >
       <canvas
         ref={canvasRef}
         className="absolute inset-0 size-full"
         onPointerDown={() => tapRef.current()}
-        aria-label="مقدمة تفاعلية: تفاعل كيميائي"
+        aria-label="مقدمة تفاعلية: تفاعل كيميائي واقعي"
       />
-
 
       {prompt && (
         <button
           type="button"
           onClick={() => tapRef.current()}
-          className="anim-breathe absolute inset-x-0 top-[16%] mx-auto w-fit rounded-full border border-border bg-card/40 px-6 py-3 text-sm tracking-wide text-silver backdrop-blur-sm"
+          className="anim-breathe absolute inset-x-0 top-[14%] mx-auto w-fit rounded-full border border-[#bcd0dd] bg-white/70 px-6 py-3 text-sm tracking-wide text-[#1d3345] shadow-lg backdrop-blur-sm"
         >
           {prompt}
         </button>
       )}
 
-      {/* particle-born name reveal */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-[24%] px-6 text-center">
+      {/* particle-born name reveal — kept crisp with real DOM text so
+          "مستر عمرو جمال" is razor sharp and never covered by particles */}
+      <div className="pointer-events-none absolute inset-x-0 top-[40%] px-5 text-center">
+        <h1
+          className="font-display font-black leading-tight text-[#132433] transition-all duration-700"
+          style={{
+            fontSize: "clamp(2.4rem, 13vw, 5rem)",
+            opacity: nameStep >= 1 ? 1 : 0,
+            transform: `translateY(${nameStep >= 1 ? 0 : 18}px) scale(${nameStep >= 1 ? 1 : 0.92})`,
+            textShadow: "0 2px 30px rgba(120,205,230,0.55), 0 1px 2px rgba(255,255,255,0.9)",
+          }}
+        >
+          مستر عمرو جمال
+        </h1>
         <p
-          className="font-display text-lg font-bold text-primary transition-all duration-700"
+          className="mt-3 font-display text-2xl font-bold text-[#0f7ba1] transition-all duration-700 sm:text-3xl"
           style={{
             opacity: nameStep >= 2 ? 1 : 0,
             transform: `translateY(${nameStep >= 2 ? 0 : 14}px)`,
@@ -738,7 +832,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
           الغزال 🦌
         </p>
         <p
-          className="mt-1 text-sm text-muted-foreground transition-all duration-700"
+          className="mt-1 text-base text-[#43596b] transition-all duration-700 sm:text-lg"
           style={{
             opacity: nameStep >= 3 ? 1 : 0,
             transform: `translateY(${nameStep >= 3 ? 0 : 14}px)`,
@@ -756,7 +850,7 @@ export function CinematicIntro({ onDone }: { onDone: () => void }) {
         <button
           type="button"
           onClick={() => advanceRef.current("out")}
-          className="press rounded-full border border-border bg-card/60 px-5 py-3 text-xs text-muted-foreground backdrop-blur-md"
+          className="press rounded-full border border-[#c3d1dd] bg-white/70 px-5 py-3 text-xs text-[#43596b] backdrop-blur-md"
         >
           تخطي المقدمة
         </button>
